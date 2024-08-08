@@ -80,7 +80,7 @@ def spawn_capybara():
 def show_game_over_screen(score):
     screen.fill(BACKGROUND_COLOR)
     font = pygame.font.Font(None, 74)
-    text = font.render(f'Game Over! Score: {score}', True, (0, 0, 0))
+    text = font.render(f'Game Over! Score: {score} ms', True, (0, 0, 0))
     screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 100))
 
     font = pygame.font.Font(None, 50)
@@ -92,7 +92,7 @@ def show_game_over_screen(score):
     font = pygame.font.Font(None, 36)
     y_offset = HEIGHT // 2 + 100
     for score, timestamp in scores[-5:]:  # Display the last 5 scores
-        score_text = font.render(f'Score: {score} | Date: {timestamp}', True, (0, 0, 0))
+        score_text = font.render(f'Score: {score} ms | Date: {timestamp}', True, (0, 0, 0))
         screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, y_offset))
         y_offset += 40
 
@@ -108,8 +108,8 @@ scores = load_scores()
 clock = pygame.time.Clock()
 running = True
 game_over = False
-initial_spawn_rate = 0.02
-spawn_rate = initial_spawn_rate
+initial_spawn_rate = 1  # Starting spawn rate (1 spawn per second)
+spawn_rate_multiplier = 2  # Rate of increase in spawn rate
 start_time = time.time()
 angle = 0
 
@@ -123,7 +123,6 @@ while running:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
                     ejected_capybaras = []
-                    spawn_rate = initial_spawn_rate
                     start_time = time.time()
                     game_over = False
                 elif event.key == pygame.K_q:
@@ -138,9 +137,20 @@ while running:
                         pygame.mixer.music.unpause()
 
     if not game_over:
-        # Draw and rotate the central capybara
+        # Calculate the elapsed time in milliseconds
         elapsed_time = time.time() - start_time
-        angle += spawn_rate * 10
+        
+        # Calculate rotation speed: starts slowly and increases exponentially
+        # Time in seconds for exponential growth (e.g., 15 seconds)
+        time_to_infinite_speed = 15
+        max_rotation_speed = 360 * FPS  # High rotation speed (360 degrees per second)
+        rotation_speed = max_rotation_speed * (elapsed_time / time_to_infinite_speed) ** 2
+        
+        # Update the angle by adding the current rotation speed
+        angle += rotation_speed / FPS  # Update angle based on FPS
+        angle %= 360  # Keep angle within 0-360 degrees
+        
+        # Rotate the capybara image and get the new rect
         rotated_capybara_img = pygame.transform.rotate(capybara_img, angle)
         rotated_capybara_rect = rotated_capybara_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
         screen.blit(rotated_capybara_img, rotated_capybara_rect)
@@ -151,24 +161,25 @@ while running:
             capybara["rect"].y += capybara["speed"] * math.sin(capybara["direction"])
             screen.blit(capybara["image"], capybara["rect"])
 
-        # Spawn a new capybara with increasing difficulty
-        if random.random() < spawn_rate:
+        # Calculate spawn rate: start with 1 spawn per second, then double every second
+        elapsed_seconds = int(time.time() - start_time)
+        spawn_rate = initial_spawn_rate * (spawn_rate_multiplier ** elapsed_seconds)
+
+        # Spawn a new capybara based on the spawn rate
+        if random.random() < spawn_rate / FPS:  # Convert spawns per second to per frame
             ejected_capybaras.append(spawn_capybara())
         
-        # Exponentially increase spawn rate over time
-        spawn_rate = initial_spawn_rate * (2 ** elapsed_time)
-
         # Check for collisions with the mouse
         mouse_pos = pygame.mouse.get_pos()
         for capybara in ejected_capybaras:
             if capybara["rect"].collidepoint(mouse_pos):
                 game_over = True
-                show_game_over_screen(int(elapsed_time))
-                save_score(int(elapsed_time))
+                show_game_over_screen(int(elapsed_time * 1000))
+                save_score(int(elapsed_time * 1000))
 
         # Draw the score
         font = pygame.font.Font(None, 36)
-        score_text = font.render(f'Score: {int(elapsed_time)}', True, (0, 0, 0))
+        score_text = font.render(f'Score: {int(elapsed_time * 1000)} ms', True, (0, 0, 0))
         screen.blit(score_text, (10, 10))
 
         # Draw the mute button
@@ -176,7 +187,7 @@ while running:
         screen.blit(mute_text, (WIDTH - mute_text.get_width() - 10, 10))
     else:
         # When the game is over, keep showing the game over screen
-        show_game_over_screen(int(elapsed_time))
+        show_game_over_screen(int(elapsed_time * 1000))
 
     pygame.display.flip()
     clock.tick(FPS)
