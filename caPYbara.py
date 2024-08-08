@@ -15,7 +15,7 @@ BACKGROUND_COLOR = (255, 255, 255)
 CAPYBARA_IMAGE = 'capybara.png'
 MUSIC_FILE = 'music.mp3'
 FPS = 60
-EJECTED_CAPYBARA_SIZE = (45, 45)  # Size of the ejected capybaras
+EJECTED_CAPYBARA_SIZE = (45, 45)  # Base size of the ejected capybaras
 SCORES_FILE = 'scores.csv'
 
 # Setup the display
@@ -25,10 +25,6 @@ pygame.display.set_caption("Capybara Evasion")
 # Load the capybara image
 capybara_img = pygame.image.load(CAPYBARA_IMAGE)
 capybara_rect = capybara_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-
-# Create a smaller capybara image for the ejected capybaras
-small_capybara_img = pygame.transform.scale(capybara_img, EJECTED_CAPYBARA_SIZE)
-small_capybara_rect = small_capybara_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
 
 # Load and play background music
 pygame.mixer.music.load(MUSIC_FILE)
@@ -46,7 +42,9 @@ def load_scores():
             for row in reader:
                 scores.append((row[0], row[1]))
     except FileNotFoundError:
-        pass
+        # If the file doesn't exist, create it
+        with open(SCORES_FILE, mode='w', newline='') as file:
+            pass  # Just create an empty file
     return scores
 
 # Save score to CSV
@@ -55,17 +53,30 @@ def save_score(score):
         writer = csv.writer(file)
         writer.writerow([score, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
 
-# Function to spawn a new capybara at the center
+# Function to spawn a new capybara at the center with a random size
 def spawn_capybara():
+    # Determine a random scale factor between 1 and 2
+    scale_factor = random.uniform(1, 2)
+    
+    # Calculate the new size
+    new_size = (int(EJECTED_CAPYBARA_SIZE[0] * scale_factor), int(EJECTED_CAPYBARA_SIZE[1] * scale_factor))
+    
+    # Scale the capybara image
+    new_capybara_img = pygame.transform.scale(capybara_img, new_size)
+    new_capybara_rect = new_capybara_img.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+    
+    # Determine random direction and speed
     direction = random.uniform(0, 2 * math.pi)
     speed = random.uniform(2, 5)
+    
     return {
-        "rect": small_capybara_rect.copy(),
+        "rect": new_capybara_rect.copy(),
+        "image": new_capybara_img,
         "direction": direction,
         "speed": speed
     }
 
-# Function to display the game over screen
+# Function to display the game over screen and the scores
 def show_game_over_screen(score):
     screen.fill(BACKGROUND_COLOR)
     font = pygame.font.Font(None, 74)
@@ -75,6 +86,15 @@ def show_game_over_screen(score):
     font = pygame.font.Font(None, 50)
     play_again_text = font.render('Press R to Play Again or Q to Quit', True, (0, 0, 0))
     screen.blit(play_again_text, (WIDTH // 2 - play_again_text.get_width() // 2, HEIGHT // 2))
+
+    # Load and display previous scores
+    scores = load_scores()
+    font = pygame.font.Font(None, 36)
+    y_offset = HEIGHT // 2 + 100
+    for score, timestamp in scores[-5:]:  # Display the last 5 scores
+        score_text = font.render(f'Score: {score} | Date: {timestamp}', True, (0, 0, 0))
+        screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, y_offset))
+        y_offset += 40
 
     pygame.display.flip()
 
@@ -129,7 +149,7 @@ while running:
         for capybara in ejected_capybaras:
             capybara["rect"].x += capybara["speed"] * math.cos(capybara["direction"])
             capybara["rect"].y += capybara["speed"] * math.sin(capybara["direction"])
-            screen.blit(small_capybara_img, capybara["rect"])
+            screen.blit(capybara["image"], capybara["rect"])
 
         # Spawn a new capybara with increasing difficulty
         if random.random() < spawn_rate:
